@@ -46,7 +46,7 @@ void verLine()
     }
 }
 
-void pedometerGraph(BYTE steps[120][1])
+void pedometerGraph(BYTE steps[100][1])
 {
     int i, temp0, temp1;
     BYTE x0, y0, x1 = 20, y1;

@@ -111,7 +111,7 @@ unsigned char month = 1;
 unsigned char hour = 12;
 unsigned char minute = 30;
 unsigned char second = 0;
-unsigned int year = 2000;
+unsigned short year = 2000;
 unsigned char toprint[10] = {0};
 BYTE steps[100][1] = {0};
 BYTE currSteps = 0;
@@ -125,8 +125,10 @@ unsigned char x1m = 0;
 unsigned char y1m = 0;
 unsigned char RA0 = '0', RA1 = '1', RA2 = '2', RA3 = '3';
 BOOL initClock = 1;
-char clock[60][2] = {
+ROM char clock[60][2] = {
     {67, 0}, {71, 1}, {74, 2}, {79, 3}, {81, 4}, {82, 5}, {84, 6}, {88, 9}, {91, 12}, {92, 14}, {93, 16}, {95, 18}, {96, 21}, {97, 25}, {98, 29}, {98, 32}, {98, 35}, {97, 39}, {96, 43}, {95, 45}, {93, 47}, {92, 50}, {89, 53}, {85, 56}, {84, 58}, {82, 58}, {79, 60}, {76, 61}, {73, 62}, {70, 63}, {67, 63}, {64, 63}, {60, 62}, {57, 61}, {54, 60}, {51, 58}, {47, 56}, {45, 54}, {43, 52}, {41, 50}, {40, 47}, {38, 44}, {37, 41}, {36, 38}, {35, 35}, {35, 32}, {35, 29}, {36, 26}, {37, 22}, {38, 18}, {40, 16}, {41, 13}, {44, 10}, {47, 7}, {49, 6}, {51, 5}, {52, 4}, {54, 3}, {57, 2}, {61, 1}};
+unsigned short stepsDay = 0;
+unsigned char stepSize = 0;
 
 //	========================	PRIVATE PROTOTYPES	========================
 static void InitializeSystem(void);
@@ -145,8 +147,8 @@ void displayToggle(void);
 int CheckUDVolt(unsigned int, unsigned int);
 int CheckLRVolt(unsigned int);
 int GetAccVal(char);
-void ProtectedBigOledPutString(rom unsigned char *, unsigned char, unsigned char, unsigned char);
-void ProtectedOledPutString(rom unsigned char *, unsigned char, unsigned char, unsigned char);
+void ProtectedBigOledPutString(unsigned char *, unsigned char, unsigned char, unsigned char);
+void ProtectedOledPutString(unsigned char *, unsigned char, unsigned char, unsigned char);
 static void _DelayMs(WORD);
 void checkMonth(void);
 int checkLeap(unsigned int);
@@ -155,7 +157,6 @@ void clockFrame(void);
 void amPmToggle(void);
 void setTime(void);
 void setDate(void);
-void pedometerView(void);
 void smallClock(void);
 void smallDate(void);
 void smallAMPM(void);
@@ -163,6 +164,9 @@ void bigClock(void);
 void analogClock(void);
 void icon(void);
 void showSteps(void);
+void dailySteps(void);
+void dailyDistance(void);
+void setStepSize(void);
 
 //	========================	VECTOR REMAPPING	========================
 #if defined(__18CXX)
@@ -472,7 +476,7 @@ void updateClockTime(void)
     {
       second = 0;
       shiftStepsArray();
-      steps[119][0] = currSteps;
+      steps[99][0] = currSteps;
       currSteps = 0;
       ++minute;
       if (minute >= 60)
@@ -493,7 +497,7 @@ void updateClockTime(void)
 void shiftStepsArray(void)
 {
   int i = 0;
-  for (i = 0; i < 120 - 1; ++i)
+  for (i = 0; i < 99; ++i)
     steps[i][0] = steps[i + 1][0];
 }
 
@@ -554,14 +558,14 @@ int GetAccVal(char c)
   return val;
 }
 
-void ProtectedOledPutString(rom unsigned char *ptr, unsigned char page, unsigned char col, unsigned char flag)
+void ProtectedOledPutString(unsigned char *ptr, unsigned char page, unsigned char col, unsigned char flag)
 {
   INTCONbits.T0IE = 0; //Timer0 Overflow Interrupt Disable
   oledPutString(ptr, page, col, flag);
   INTCONbits.T0IE = 1;
 }
 
-void ProtectedBigOledPutString(rom unsigned char *ptr, unsigned char page, unsigned char col, unsigned char flag)
+void ProtectedBigOledPutString(unsigned char *ptr, unsigned char page, unsigned char col, unsigned char flag)
 {
   INTCONbits.T0IE = 0; //Timer0 Overflow Interrupt Disable
   bigOledPutString(ptr, page, col, flag);
@@ -649,18 +653,18 @@ void setTime(void)
 
   while (1)
   {
+    clearScreen0();
     smallClock();
+
     if (CheckLRVolt(mTouchReadButton(RA0)))
     {
       if (++index > 3)
         index = 3;
-      clearScreen0();
     }
     if (CheckLRVolt(mTouchReadButton(RA3)))
     {
       if (--index < 0)
         index = 0;
-      clearScreen0();
     }
 
     if (CheckUDVolt(mTouchReadButton(RA1), mTouchReadButton(RA2)) == 1)
@@ -738,34 +742,18 @@ void setDate(void)
       switch (index)
       {
       case 1:
-        ++y;
+        ++d;
+        if (d > 31)
+          d = 1;
+        else if ((checkLeap(year) && m == 2 && d > 29) || (m == 2 && d > 28) || d > 30)
+          d = 1;
         break;
       case 2:
         if (++m > 12)
           m = 1;
         break;
       case 3:
-        ++d;
-        switch (m)
-        {
-        case 1:
-        case 3:
-        case 5:
-        case 7:
-        case 8:
-        case 10:
-        case 12:
-          if (d > 31)
-          {
-            d = 1;
-          }
-          break;
-        default:
-          if ((checkLeap(y) && m == 2 && d > 29) || (m == 2 && d > 28) || d > 30)
-          {
-            d = 1;
-          }
-        }
+        ++y;
         break;
       }
 
@@ -773,45 +761,26 @@ void setDate(void)
       switch (index)
       {
       case 1:
-        if (--y < 2000)
-          y = 2000;
+        --d;
+        if (checkLeap(y) && m == 2 && d < 1)
+          d = 29;
+        else if (m == 2 && d < 1)
+          d = 28;
+        else if (d < 1)
+          d = 30;
+        else if (day < 1)
+          day = 31;
         break;
       case 2:
         if (--m < 1)
           m = 12;
         break;
       case 3:
-        --d;
-        switch (m)
-        {
-        case 1:
-        case 3:
-        case 5:
-        case 7:
-        case 8:
-        case 10:
-        case 12:
-          if (d < 1)
-          {
-            d = 31;
-          }
-          break;
-        default:
-          if (checkLeap(y) && m == 2 && d < 1)
-          {
-            d = 29;
-          }
-          else if (m == 2 && d < 1)
-          {
-            d = 28;
-          }
-          else if (d < 30)
-          {
-            d = 30;
-          }
-        }
+        if (--y < 2000)
+          y = 2000;
         break;
       }
+
     if (CheckButtonPressed())
       break;
 
@@ -878,11 +847,6 @@ void icon(void)
   }
 }
 
-void pedometerView(void)
-{
-  graphBase(steps);
-}
-
 void detectStep(void)
 {
   stepsInputs[0] = stepsInputs[1];
@@ -899,6 +863,51 @@ void detectStep(void)
         if (++currSteps > 100)
           currSteps = 100;
     }
+}
+
+void dailySteps(void)
+{
+  sprintf(toprint, "Steps:");
+  ProtectedOledPutString(toprint, 13, 0, 1);
+  sprintf(toprint, "%d", stepsDay);
+  ProtectedOledPutString(toprint, 13, 35, 1);
+}
+
+void dailyDistance(void)
+{
+  sprintf(toprint, "Distance:");
+  ProtectedOledPutString(toprint, 15, 0, 1);
+  sprintf(toprint, "%dkm", (stepsDay * stepSize) / 100000);
+  ProtectedOledPutString(toprint, 15, 50, 1);
+}
+
+void setStepSize(void)
+{
+  while (1)
+  {
+    clearScreen0();
+
+    smallClock();
+    dailySteps();
+    dailyDistance();
+    if (CheckUDVolt(mTouchReadButton(RA1), mTouchReadButton(RA2)) == 1)
+    {
+      if (++stepSize > 120)
+        stepSize = 120;
+    }
+    if (CheckUDVolt(mTouchReadButton(RA1), mTouchReadButton(RA2)) == 2)
+    {
+      if (--stepSize < 0)
+        stepSize = 0;
+    }
+
+    if (CheckButtonPressed())
+      break;
+
+    sprintf(toprint, "%dcm", stepSize);
+    ProtectedOledPutString(toprint, 10, 35, 0);
+    DelayMs(50);
+  }
 }
 
 void mainTraverse(int currChoice)
@@ -918,14 +927,17 @@ void mainTraverse(int currChoice)
     setDate();
     break;
   case 5:
-    pedometerView();
+    setStepSize();
+    break;
+  case 6:
+    graphBase(steps);
     break;
   }
 }
 
 void mainMenu(void)
 {
-  int currChoice = 1;
+  char currChoice = 1;
   clearScreen0();
   while (1)
   {
@@ -960,6 +972,12 @@ void mainMenu(void)
     else
       ProtectedOledPutString(toprint, 5, 2 * 6, 1);
 
+    sprintf(toprint, "Graph");
+    if (6 == currChoice)
+      ProtectedOledPutString(toprint, 6, 2 * 6, 0);
+    else
+      ProtectedOledPutString(toprint, 6, 2 * 6, 1);
+
     if (CheckUDVolt(mTouchReadButton(RA1), mTouchReadButton(RA2)) == 1) //Pressed up
       if (currChoice > 1)
       {
@@ -967,7 +985,7 @@ void mainMenu(void)
       }
     DelayMs(30);
     if (CheckUDVolt(mTouchReadButton(RA1), mTouchReadButton(RA2)) == 2) //Pressed down
-      if (currChoice < 5)
+      if (currChoice < 6)
       {
         currChoice++;
       }

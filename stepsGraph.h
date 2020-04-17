@@ -10,7 +10,7 @@
 #include "my_oled.h"
 
 void strepLine();
-void graphBase(BYTE steps[120][1]);
+void graphBase(BYTE steps[100][1]);
 BOOL CheckButtonPressed(void);
 void clearScreen0(void);
 
